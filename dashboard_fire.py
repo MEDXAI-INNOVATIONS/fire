@@ -2,10 +2,7 @@ import streamlit as st
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import pyttsx3
-import threading
 import time
-import queue
 
 st.title("Fire Event Detection")
 
@@ -46,43 +43,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
-# TTS Queue and Thread
-tts_queue = queue.Queue()
-last_spoken = ""
-last_spoken_time = 0
-TTS_COOLDOWN = 5  # seconds
-
-def tts_worker():
-    engine = pyttsx3.init()
-    engine.setProperty('rate', 180)
-    engine.setProperty('volume', 1.0)
-    while True:
-        text = tts_queue.get()
-        if text is None:
-            break
-        try:
-            engine.say(text)
-            engine.runAndWait()
-        except RuntimeError:
-            # Skip if engine is busy (shouldn't happen with queue, but safe)
-            pass
-        tts_queue.task_done()
-
-# Start TTS thread once
-if 'tts_thread_started' not in st.session_state:
-    tts_thread = threading.Thread(target=tts_worker, daemon=True)
-    tts_thread.start()
-    st.session_state.tts_thread_started = True
-
-def speak_async_safe(text):
-    global last_spoken, last_spoken_time
-    current_time = time.time()
-    if text == last_spoken and (current_time - last_spoken_time) < TTS_COOLDOWN:
-        return
-    last_spoken = text
-    last_spoken_time = current_time
-    tts_queue.put(text)
 
 # Placeholders
 frame_placeholder = st.empty()
@@ -132,15 +92,13 @@ try:
                 unsafe_allow_html=True
             )
 
-            # Voice alert for new detections
-            if current_detection != last_detection:
-                speak_async_safe(f"Marine vessel detected: {current_detection}")
-                last_detection = current_detection
+            # Update detection state
+            last_detection = current_detection
         else:
             message_placeholder.empty()
             last_detection = ""
 
-        # Small delay to reduce CPU
+        # Small delay to reduce CPU usage
         time.sleep(0.1)
 
 except KeyboardInterrupt:
@@ -149,4 +107,3 @@ finally:
     if cap is not None:
         cap.release()
     status_placeholder.info("⏹️ Camera released")
-    # Optionally stop TTS thread (not critical since daemon=True)
